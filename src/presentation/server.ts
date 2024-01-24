@@ -20,7 +20,8 @@ export class Server {
     async start() {
         this.app.use(express.json())
         this.app.use(this.routes)
-        this.app.use('/static',express.static("src/presentation/javascript"))
+        this.app.use('/static/javascript',express.static("src/presentation/public/javascript"))
+        this.app.use('/static/css',express.static("src/presentation/public/css"))
 
         const server = http.createServer(this.app)
 

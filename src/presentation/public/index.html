@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.min.css" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <v-app>
+            <v-main>
+                <v-container fill-height class="d-flex align-center justify-center" v-if="mainView">
+                    <v-card elevation="0" outlined width="400px" height="400px" class="d-flex align-center justify-center flex-column">
+                        <v-btn depressed class="mb-4" x-large width="200px" @click="cssViewChange">
+                            Csv view
+                        </v-btn>
+                        <v-btn depressed x-large width="200px" @click="dbViewChange">
+                            Db view
+                        </v-btn>
+                    </v-card>
+                </v-container>
+                <v-container fill-height v-else-if="csvView">
+                    <v-btn elevation="0" absolute icon top right @click="mainViewChange()">
+                        <v-icon>
+                            mdi-close
+                        </v-icon>
+                    </v-btn>
+                    <v-container fill-height class="d-flex align-center justify-center">
+                        <v-card width="400px" height="400px" outlined elevation="0">
+                            <v-container fill-height class="d-flex align-center justify-center flex-column">
+                                <v-icon>
+                                    mdi-cloud-upload
+                                </v-icon>
+                                <span>
+                                    Subir csv
+                                </span>
+                            </v-container>
+                        </v-card>
+                    </v-container>
+                </v-container>
+                <v-container fill-height v-else-if="dbView">
+                    <v-btn elevation="0" absolute icon top right @click="mainViewChange()">
+                        <v-icon>
+                            mdi-close
+                        </v-icon>
+                    </v-btn>
+                    db view
+                </v-container>
+            </v-main>
+        </v-app>
+    </div>
+</body>
+    <script src="./static/javascript/vue.js"></script>
+    <script src="./static/javascript/vuetify.min.js"></script>
+    <script src="./static/javascript/main.js"></script>
+</html>
