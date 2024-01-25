@@ -1,9 +1,12 @@
 import express, { Router } from 'express'
 import http from 'http'
+import { io } from '../infrastructure/socket/io'
+import SocketIo from 'socket.io';
 
 interface Options {
     port?: number
-    routes: Router
+    routes: Router,
+    socket: io
 }
 
 export class Server {
@@ -26,6 +29,7 @@ export class Server {
         const server = http.createServer(this.app)
 
         server.listen(this.port, async () => {
+            const ioServer = await io.connect(server)
             console.log(`Server running on PORT *:${this.port}`)
         })
     }

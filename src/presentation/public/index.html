@@ -7,6 +7,8 @@
     <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="./static/javascript/socket.io.min.js"></script>
 </head>
 <body>
     <div id="app">
@@ -29,16 +31,55 @@
                         </v-icon>
                     </v-btn>
                     <v-container fill-height class="d-flex align-center justify-center">
-                        <v-card width="400px" height="400px" outlined elevation="0">
-                            <v-container fill-height class="d-flex align-center justify-center flex-column">
-                                <v-icon>
-                                    mdi-cloud-upload
-                                </v-icon>
-                                <span>
-                                    Subir csv
-                                </span>
+                        <div>
+                            <v-card width="200px" height="200px" outlined elevation="0" @click="opencsvuploaddialog" v-if="file == null">
+                                <v-container fill-height class="d-flex align-center justify-center flex-column">
+                                    <v-icon>
+                                        mdi-cloud-upload
+                                    </v-icon>
+                                    <span>
+                                        Seleccionar csv
+                                    </span>
+                                </v-container>
+                            </v-card>
+                            <v-container v-else>
+                                <v-container  v-if="!uploated_file">
+                                    <v-card width="200px" height="200px" outlined elevation="0">
+                                        <v-container fluid>
+                                            <v-btn elevation="0" absolute small icon top right @click="cleanCsv()">
+                                                <v-icon small>
+                                                    mdi-close
+                                                </v-icon>
+                                            </v-btn>
+                                            <div>
+                                                {{file.name}}
+                                            </div>
+                                            <div>
+                                                {{file.lastModified}}
+                                            </div>
+                                            <div>
+                                                {{file.lastModifiedDate}}
+                                            </div>
+                                        </v-container>
+                                    </v-card>
+                                    <v-expand-transition>
+                                        <v-btn v-show="file" depressed block color="primary" class="mt-2" @click="startProcess()">
+                                            Subir archivo
+                                        </v-btn>
+                                    </v-expand-transition>
+                                </v-container>
+                                <v-container fill-height fluid v-else>
+                                    <v-btn :disabled="processingCvs" depressed class="mb-2" :loading="processingCvs" @click="startProcessingCvs()">
+                                        <span v-if="!processingCvs"> Start process </span>
+                                        <span v-else> Processing </span>
+                                    </v-btn>
+                                    <v-card outlined>
+                                        <v-data-table dense :headers="listStudentHeader" :items="listStudent"></v-data-table>
+                                    </v-card>
+                                </v-container>
                             </v-container>
-                        </v-card>
+                            <input type="file" ref="file" @change="uploadFile" class="d-none" accept=".csv">
+                        </div>
                     </v-container>
                 </v-container>
                 <v-container fill-height v-else-if="dbView">
@@ -49,6 +90,9 @@
                     </v-btn>
                     db view
                 </v-container>
+                <v-snackbar v-model="errorSnackBar.status">
+                    {{errorSnackBar.message}}
+                </v-snackbar>
             </v-main>
         </v-app>
     </div>
