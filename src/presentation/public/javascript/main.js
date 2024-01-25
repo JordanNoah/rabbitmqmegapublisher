@@ -3,8 +3,8 @@ new Vue({
     vuetify: new Vuetify(),
     data:{
         mainView: false,
-        csvView: true,
-        dbView: false,
+        csvView: false,
+        dbView: true,
         file: null,
         uploated_file: null,
         errorSnackBar:{
@@ -31,10 +31,104 @@ new Vue({
             }
         ],
         processingCvs: false,
-        io: io("")
+        io: io(""),
+        validDb:true,
+        rulesDb:{
+            hostDb:[
+                v => !!v || 'Host es requerido'
+            ],
+            usernameDb:[
+                v => !!v || 'Usuario es requerido'
+            ],
+            passwordDb:[
+                v => !!v || 'Password es requerida'
+            ]
+        },
+        database:{
+            host:null,
+            username:null,
+            password:null
+        },
+        availableDatabases:null,
+        selectedDb:null,
+        options:{},
+        itemsEvents:[],
+        headersEvents:[
+            {
+                text:'Id',
+                value:'id'
+            },
+            {
+                text:'uuid',
+                value:'uuid'
+            },
+            {
+                text:'queue',
+                value:'queue'
+            },
+            {
+                text:'event',
+                value:'event'
+            },
+            {
+                text:'payload',
+                value:'payload'
+            },
+            {
+                text:'status',
+                value: 'status'
+            }
+        ],
+        totalEventsItems:0,
+        rabbitMqConfig:{
+            username:'team-accion-docente',
+            password:'sF&34#hjghGH@',
+            protocol:'amqp',
+            hostname:'35.222.192.45',
+            port:5672,
+            vhost:'/',
+            queue:'teaching-action.students-academic-synchronization',
+            exchange:'sagittarius-a',
+            routingKey:'sagittarius-a',
+            typeExchange:'fanout'
+        },
+        rabbitMqConfigRules:{
+            username:[v => !!v || 'El usuario es necesario'],
+            password:[v => !!v || 'La contraseña es necesario'],
+            protocol:[v => !!v || 'El protocolo es necesaria'],
+            hostname:[v => !!v || 'El hostname es necesario'],
+            port:[v => !!v || 'El puerto es necesario'],
+            vhost:[v => !!v || 'El vhost es necesario'],
+            queue:[v => !!v || 'El queue es necesario'],
+            exchange:[v => !!v || 'El exchange es necesario'],
+            routingKey:[v => !!v || 'El routing key es necesario'],
+            typeExchange:[v => !!v || 'El type exchange es necesaria'],
+        },
+        validRabbitmq: false
     },
     mounted: function(){
-        console.log(this.io);
+        this.io.on("processedElement", (msg) => {
+            var index = this.listStudent.findIndex(item => item.uuidStudent === msg.uuidStudent)
+            this.listStudent[index].state = 'Processed'
+        })
+        this.io.on("finishedProcess",(msg)=>{
+            this.processingCvs = false
+        })
+        console.log(this.options);
+    },
+    watch:{
+        'options.itemsPerPage':{
+            handler(){
+                this.getDataFromDb()
+            },
+            deep: true
+        },
+        'options.page':{
+            handler(){
+                this.getDataFromDb()
+            },
+            deep: true
+        }
     },
     methods:{
         mainViewChange(){
@@ -87,6 +181,26 @@ new Vue({
             axios.post("./csv/processing").then((res) => {
                 console.log(res.data);
             })
+        },
+        connectDb(){
+            if (this.$refs.form.validate()) {
+                axios.post("./database/connect",this.database).then((res) => {
+                    this.availableDatabases = res.data
+                })
+            }
+        },
+        getDataFromDb(){
+            var body = this.database
+            body.dbname = this.selectedDb
+            body.page = this.options.page
+            body.itemsPage = this.options.itemsPerPage
+            axios.post("./database/data",body).then((res) => {
+                this.itemsEvents = res.data.events
+                this.totalEventsItems = res.data.total
+            })
+        },
+        publishRabbit(){
+            this.$refs.formRabbitMq.validate()
         }
     }
 })

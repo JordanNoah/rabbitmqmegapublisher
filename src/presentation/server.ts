@@ -1,16 +1,18 @@
 import express, { Router } from 'express'
 import http from 'http'
-import { io } from '../infrastructure/socket/io'
-import SocketIo from 'socket.io';
+import { SocketManager } from '../infrastructure/socket/io'
 
 interface Options {
     port?: number
-    routes: Router,
-    socket: io
+    routes: Router
 }
 
+var app = express()
+const server = http.createServer(app)
+
+var socketManager = new SocketManager(server)
+
 export class Server {
-    public readonly app = express()
     private readonly port: number
     private readonly routes: Router
 
@@ -21,16 +23,16 @@ export class Server {
     }
 
     async start() {
-        this.app.use(express.json())
-        this.app.use(this.routes)
-        this.app.use('/static/javascript',express.static("src/presentation/public/javascript"))
-        this.app.use('/static/css',express.static("src/presentation/public/css"))
-
-        const server = http.createServer(this.app)
+        app.use(express.json())
+        app.use(this.routes)
+        app.use('/static/javascript',express.static("src/presentation/public/javascript"))
+        app.use('/static/css',express.static("src/presentation/public/css"))
 
         server.listen(this.port, async () => {
-            const ioServer = await io.connect(server)
             console.log(`Server running on PORT *:${this.port}`)
         })
     }
 }
+
+
+export {socketManager}

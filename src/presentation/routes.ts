@@ -6,21 +6,32 @@ import fsreader from 'fs'
 import csv from 'csv-parser'
 import { StudentDto } from "../domain/dtos/students.dto";
 import csvProcessing from "../infrastructure/csvProcessing"
-import SocketIo from 'socket.io';
+import { Options, Sequelize, DataTypes, Model } from "sequelize";
+import { log } from "console";
+
+
+interface Event extends Model {
+    id: number;
+    uuid: string;
+    queue: string;
+    event: string;
+    payload: any; // ajusta el tipo según tu estructura real
+  }
+  
+  interface CleanedEvent {
+    id: number;
+    uuid: string;
+    queue: string;
+    event: string;
+    payload: any; // ajusta el tipo según tu estructura real
+    status: string;
+  }
 
 export class AppRoutes {
-    public static io: SocketIo.Server;
-
-    constructor(io: SocketIo.Server){
-        AppRoutes.io = io
-    }
-
     static get routes(): Router {
         const router = Router()
-
+        
         router.get('/', (req, res) => {
-            console.log(AppRoutes.io);
-            
             res.sendFile(path.join(__dirname, './public/index.html'))
         })
 
@@ -98,6 +109,100 @@ export class AppRoutes {
             });
 
             res.json({processing:true})
+        })
+
+        router.post('/database/connect', async (req, res) => {
+            const { host, username, password} = req.body
+
+            var config: Options = {
+                host,
+                username,
+                password,
+                logging:false,
+                port:3306,
+                dialect:'mysql'
+            }
+
+            const sequelize = new Sequelize(config)
+            var [databases] = await sequelize.query('SHOW DATABASES')
+            
+            res.send(databases)
+        })
+
+        router.post('/database/data', async (req,res) => {
+            const { host, username, password, dbname, page, itemsPage} = req.body
+
+            console.log(req.body);
+            
+
+            var config: Options = {
+                host,
+                username,
+                password,
+                database:dbname,
+                logging:false,
+                port:3306,
+                dialect:'mysql'
+            }
+
+            console.log(config);
+            
+
+            const sequelize = new Sequelize(config)
+
+            var sequelizeEvent = sequelize.define<Event>('domain_event_listen_queue',{
+                id:{
+                    type:DataTypes.INTEGER,
+                    primaryKey: true
+                },
+                uuid:{
+                    type:DataTypes.TEXT,
+                },
+                connection:{
+                    type:DataTypes.TEXT,
+                },
+                queue:{
+                    type:DataTypes.TEXT,
+                },
+                event:{
+                    type:DataTypes.TEXT,
+                },
+                payload:{
+                    type:DataTypes.TEXT,
+                },
+                exception:{
+                    type:DataTypes.TEXT,
+                }
+            },{
+                tableName:'domain_event_listen_queue',
+                timestamps:false
+            })
+
+            sequelize.sync().then(async () => {
+                var events = await sequelizeEvent.findAll({
+                    limit:itemsPage,
+                    offset:(page - 1) * itemsPage
+                })
+
+                const eventClean = events.map(function (element) {
+                    return {
+                        id: element.id,
+                        uuid: element.uuid,
+                        queue: element.queue,
+                        event: element.event,
+                        payload: element.payload,
+                        status: 'not sended'
+                    };
+                  });
+                
+                var totalEvents = await sequelizeEvent.count()
+                res.json({
+                    total:totalEvents,
+                    events:eventClean
+                })
+            }).catch((error)=>{
+                console.log("error: ",error);
+            })
         })
 
         return router

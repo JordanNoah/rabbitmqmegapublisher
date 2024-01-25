@@ -68,7 +68,7 @@
                                         </v-btn>
                                     </v-expand-transition>
                                 </v-container>
-                                <v-container fill-height fluid v-else>
+                                <v-container fill-height fluid class="d-flex flex-column" v-else>
                                     <v-btn :disabled="processingCvs" depressed class="mb-2" :loading="processingCvs" @click="startProcessingCvs()">
                                         <span v-if="!processingCvs"> Start process </span>
                                         <span v-else> Processing </span>
@@ -88,7 +88,71 @@
                             mdi-close
                         </v-icon>
                     </v-btn>
-                    db view
+                    <v-container fill-height fluid class="d-flex flex-column">
+                        <div class="d-flex mb-4">
+                            <div class="d-flex flex-column justify-space-between">
+                                <v-card class="mr-2 mb-2 pa-2">
+                                    <div class="mb-2">1.- Conectar a la base de datos</div>
+                                    <v-form class="mr-4" ref="form" v-model="validDb">
+                                        <v-text-field v-model="database.host" :rules="rulesDb.hostDb" dense outlined label="Host"></v-text-field>
+                                        <v-text-field v-model="database.username" :rules="rulesDb.usernameDb" dense outlined label="Username"></v-text-field>
+                                        <v-text-field v-model="database.password" :rules="rulesDb.passwordDb" dense outlined label="Password"></v-text-field>
+                                        <v-btn depressed @click="connectDb">
+                                            Connect db
+                                        </v-btn>
+                                    </v-form>
+                                </v-card>
+                                <v-card class="mr-2 pa-2" :disabled="!availableDatabases">
+                                    <div class="mb-2">2.- Seleccionar esquema</div>
+                                    <div class="d-flex">
+                                        <v-select v-model="selectedDb" hide-details outlined dense label="Databases" :items="availableDatabases" item-text="Database"></v-select>
+                                        <v-btn icon @click="getDataFromDb()">
+                                            <v-icon>
+                                                mdi-sync
+                                            </v-icon>
+                                        </v-btn>
+                                    </div>
+                                </v-card>
+                            </div>
+                            <v-card class="pa-2" :disabled="itemsEvents.length == 0">
+                                <div class="d-flex justify-space-between mb-2">
+                                    3.- Configurar rabbitmq
+                                    <v-btn icon color="primary" @click="publishRabbit()">
+                                        <v-icon>
+                                            mdi-cloud-upload
+                                        </v-icon>
+                                    </v-btn>
+                                </div>
+                                <div>
+                                    <v-form class="d-flex" ref="formRabbitMq" v-model="validRabbitmq">
+                                        <div class="mr-2">
+                                            <v-text-field outlined dense clearable :rules="rabbitMqConfigRules.username" v-model="rabbitMqConfig.username" label="Usuario"></v-text-field>
+                                            <v-text-field outlined dense clearable :rules="rabbitMqConfigRules.password" v-model="rabbitMqConfig.password" label="Contraseña"></v-text-field>
+                                            <v-text-field outlined dense clearable :rules="rabbitMqConfigRules.protocol" v-model="rabbitMqConfig.protocol" label="Protocolo"></v-text-field>
+                                            <v-text-field outlined dense clearable :rules="rabbitMqConfigRules.hostname" v-model="rabbitMqConfig.hostname" label="Hostname"></v-text-field>
+                                            <v-text-field outlined dense clearable :rules="rabbitMqConfigRules.port" v-model="rabbitMqConfig.port" label="Puerto"></v-text-field>
+                                        </div>
+                                        <div>
+                                            <v-text-field outlined dense clearable :rules="rabbitMqConfigRules.vhost" v-model="rabbitMqConfig.vhost" label="Vhost"></v-text-field>
+                                            <v-text-field outlined dense clearable :rules="rabbitMqConfigRules.queue" v-model="rabbitMqConfig.queue" label="Queue"></v-text-field>
+                                            <v-text-field outlined dense clearable :rules="rabbitMqConfigRules.exchange" v-model="rabbitMqConfig.exchange" label="Exchange"></v-text-field>
+                                            <v-text-field outlined dense clearable :rules="rabbitMqConfigRules.routingKey" v-model="rabbitMqConfig.routingKey" label="Routing key"></v-text-field>
+                                            <v-text-field outlined dense clearable :rules="rabbitMqConfigRules.typeExchange" v-model="rabbitMqConfig.typeExchange" label="Rabbit type exchange"></v-text-field>
+                                        </div>
+                                    </v-form>
+                                </div>
+                            </v-card>
+                        </div>
+                        <v-card width="100%">
+                            <v-data-table :options.sync="options" :headers="headersEvents" :items="itemsEvents" :server-items-length="totalEventsItems">
+                                <template v-slot:item.payload="{ item }">
+                                    <div style="max-width: 200px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">
+                                        {{item.payload}}
+                                    </div>
+                                </template>
+                            </v-data-table>
+                        </v-card>
+                    </v-container>
                 </v-container>
                 <v-snackbar v-model="errorSnackBar.status">
                     {{errorSnackBar.message}}
