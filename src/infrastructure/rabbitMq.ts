@@ -52,9 +52,6 @@ export class Rabbitmq {
                             percent: ((index+1)/values.length) * 100
                         }
 
-                        console.log(objectSocket);
-                        
-
                         socketManager.emit('processedEventRabbit',objectSocket)
                         concurrencySemaphore.release();
                     }

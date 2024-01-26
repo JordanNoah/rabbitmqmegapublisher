@@ -150,7 +150,6 @@ new Vue({
         },
         uploadFile() {
             this.file = this.$refs.file.files[0];
-            console.log(this.file);
         },
         cleanCsv(){
             this.file = null
@@ -184,7 +183,6 @@ new Vue({
         connectDb(){
             if (this.$refs.form.validate()) {
                 axios.post("./database/connect",this.database).then((res) => {
-                    console.log(res);
                     if (res.data.error) {
                         this.errorSnackBar = true
                         this.errorSnackBarMessage = 'Error en la conexion de la base de datos'

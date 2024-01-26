@@ -158,8 +158,6 @@ export class AppRoutes {
                     limit:itemsPage,
                     offset:(page - 1) * itemsPage
                 })
-
-                console.log(events[0]);
                 
 
                 const eventClean = events.map(function (element) {
@@ -191,10 +189,7 @@ export class AppRoutes {
         })
 
         router.post("/rabbit/sync", async(req,res) => {            
-            const { rabbit, database } = req.body
-
-            console.log(rabbit);
-            
+            const { rabbit, database } = req.body          
 
             var config: Options = {
                 host: database.host,
@@ -217,8 +212,6 @@ export class AppRoutes {
                     },
                     raw:true
                 }).then((values) => {
-                    console.log(values[0]);
-                    
                     Rabbitmq.start(rabbit,values)
                 })
             })
