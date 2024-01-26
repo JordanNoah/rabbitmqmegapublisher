@@ -119,13 +119,17 @@ new Vue({
     watch:{
         'options.itemsPerPage':{
             handler(){
-                this.getDataFromDb()
+                if(this.selectedDb){
+                    this.getDataFromDb()
+                }
             },
             deep: true
         },
         'options.page':{
             handler(){
-                this.getDataFromDb()
+                if(this.selectedDb){
+                    this.getDataFromDb()
+                }
             },
             deep: true
         }
