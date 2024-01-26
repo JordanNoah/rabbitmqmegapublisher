@@ -2,15 +2,13 @@ new Vue({
     el:"#app",
     vuetify: new Vuetify(),
     data:{
-        mainView: false,
+        mainView: true,
         csvView: false,
-        dbView: true,
+        dbView: false,
         file: null,
         uploated_file: null,
-        errorSnackBar:{
-            status: false,
-            message: ''
-        },
+        errorSnackBar:false,
+        errorSnackBarMessage:'',
         listStudent:[],
         listStudentHeader:[
             {
@@ -63,20 +61,12 @@ new Vue({
                 value:'uuid'
             },
             {
-                text:'queue',
-                value:'queue'
-            },
-            {
                 text:'event',
                 value:'event'
             },
             {
                 text:'payload',
                 value:'payload'
-            },
-            {
-                text:'status',
-                value: 'status'
             }
         ],
         totalEventsItems:0,
@@ -100,11 +90,11 @@ new Vue({
             port:[v => !!v || 'El puerto es necesario'],
             vhost:[v => !!v || 'El vhost es necesario'],
             queue:[v => !!v || 'El queue es necesario'],
-            exchange:[v => !!v || 'El exchange es necesario'],
-            routingKey:[v => !!v || 'El routing key es necesario'],
             typeExchange:[v => !!v || 'El type exchange es necesaria'],
         },
-        validRabbitmq: false
+        validRabbitmq: false,
+        processedEvents:0,
+        percentProcess:0
     },
     mounted: function(){
         this.io.on("processedElement", (msg) => {
@@ -114,7 +104,12 @@ new Vue({
         this.io.on("finishedProcess",(msg)=>{
             this.processingCvs = false
         })
-        console.log(this.options);
+        this.io.on("processedEventRabbit", (msg) => {
+            this.totalEventsItems = msg.notProcessed
+            this.processedEvents = msg.processed
+
+            this.percentProcess = msg.percent
+        })
     },
     watch:{
         'options.itemsPerPage':{
@@ -167,8 +162,8 @@ new Vue({
             const headers = { 'Content-Type':'multipart/form-data' }
             axios.post('./csv/upload',formData,{headers}).then((res)=>{
                 if(res.status == 400){
-                    this.errorSnackBar.status = true
-                    this.errorSnackBar.message = res.data.error
+                    this.errorSnackBar = true
+                    this.errorSnackBarMessage = res.data.error
                 }else{
                     this.uploated_file = res.data.file
                     this.getDataFile()
@@ -189,7 +184,13 @@ new Vue({
         connectDb(){
             if (this.$refs.form.validate()) {
                 axios.post("./database/connect",this.database).then((res) => {
-                    this.availableDatabases = res.data
+                    console.log(res);
+                    if (res.data.error) {
+                        this.errorSnackBar = true
+                        this.errorSnackBarMessage = 'Error en la conexion de la base de datos'
+                    }else{
+                        this.availableDatabases = res.data.message
+                    }
                 })
             }
         },
@@ -204,7 +205,11 @@ new Vue({
             })
         },
         publishRabbit(){
-            this.$refs.formRabbitMq.validate()
+            if(this.$refs.formRabbitMq.validate()){
+                axios.post("./rabbit/sync",{rabbit:this.rabbitMqConfig,database:this.database}).then((res)=>{
+                    
+                })
+            }
         }
     }
 })

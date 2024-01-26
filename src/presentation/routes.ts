@@ -8,6 +8,7 @@ import { StudentDto } from "../domain/dtos/students.dto";
 import csvProcessing from "../infrastructure/csvProcessing"
 import { Options, Sequelize, DataTypes, Model } from "sequelize";
 import { log } from "console";
+import { Rabbitmq } from "../infrastructure/rabbitMq";
 
 
 interface Event extends Model {
@@ -112,28 +113,30 @@ export class AppRoutes {
         })
 
         router.post('/database/connect', async (req, res) => {
-            const { host, username, password} = req.body
+            try{
+                const { host, username, password} = req.body
 
-            var config: Options = {
-                host,
-                username,
-                password,
-                logging:false,
-                port:3306,
-                dialect:'mysql'
-            }
-
-            const sequelize = new Sequelize(config)
-            var [databases] = await sequelize.query('SHOW DATABASES')
+                var config: Options = {
+                    host,
+                    username,
+                    password,
+                    logging:false,
+                    port:3306,
+                    dialect:'mysql'
+                }
+    
+                const sequelize = new Sequelize(config)
+                
+                var [databases] = await sequelize.query('SHOW DATABASES')
             
-            res.send(databases)
+                res.send({error:false, message: databases})
+            }catch(error){
+                res.send({error:true, message:'Error connected'})
+            }
         })
 
         router.post('/database/data', async (req,res) => {
             const { host, username, password, dbname, page, itemsPage} = req.body
-
-            console.log(req.body);
-            
 
             var config: Options = {
                 host,
@@ -144,9 +147,6 @@ export class AppRoutes {
                 port:3306,
                 dialect:'mysql'
             }
-
-            console.log(config);
-            
 
             const sequelize = new Sequelize(config)
 
@@ -180,6 +180,9 @@ export class AppRoutes {
 
             sequelize.sync().then(async () => {
                 var events = await sequelizeEvent.findAll({
+                    where:{
+                        event:'academic-administration.sign-ups.student_signedup'
+                    },
                     limit:itemsPage,
                     offset:(page - 1) * itemsPage
                 })
@@ -195,7 +198,11 @@ export class AppRoutes {
                     };
                   });
                 
-                var totalEvents = await sequelizeEvent.count()
+                var totalEvents = await sequelizeEvent.count({
+                    where:{
+                        event:'academic-administration.sign-ups.student_signedup'
+                    },
+                })
                 res.json({
                     total:totalEvents,
                     events:eventClean
@@ -203,6 +210,66 @@ export class AppRoutes {
             }).catch((error)=>{
                 console.log("error: ",error);
             })
+        })
+
+        router.post("/rabbit/sync", async(req,res) => {            
+            const { rabbit, database } = req.body
+
+            console.log(rabbit);
+            
+
+            var config: Options = {
+                host: database.host,
+                username: database.username,
+                password: database.password,
+                database: database.dbname,
+                logging:false,
+                port:3306,
+                dialect:'mysql'
+            }
+
+            const sequelize = new Sequelize(config)
+
+            var sequelizeEvent = sequelize.define<Event>('domain_event_listen_queue',{
+                id:{
+                    type:DataTypes.INTEGER,
+                    primaryKey: true
+                },
+                uuid:{
+                    type:DataTypes.TEXT,
+                },
+                connection:{
+                    type:DataTypes.TEXT,
+                },
+                queue:{
+                    type:DataTypes.TEXT,
+                },
+                event:{
+                    type:DataTypes.TEXT,
+                },
+                payload:{
+                    type:DataTypes.TEXT,
+                },
+                exception:{
+                    type:DataTypes.TEXT,
+                }
+            },{
+                tableName:'domain_event_listen_queue',
+                timestamps:false
+            })
+
+            sequelize.sync().then(async () => {
+                sequelizeEvent.findAll({
+                    where:{
+                        event:'academic-administration.sign-ups.student_signedup'
+                    },
+                    raw:true
+                }).then((values) => {
+                    Rabbitmq.start(rabbit,values)
+                })
+            })
+
+            res.json({processing:true,totalRows: await sequelizeEvent.count()})
         })
 
         return router
