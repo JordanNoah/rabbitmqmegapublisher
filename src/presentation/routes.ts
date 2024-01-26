@@ -6,18 +6,13 @@ import fsreader from 'fs'
 import csv from 'csv-parser'
 import { StudentDto } from "../domain/dtos/students.dto";
 import csvProcessing from "../infrastructure/csvProcessing"
-import { Options, Sequelize, DataTypes, Model } from "sequelize";
+import { Options, Sequelize, DataTypes, Model, Op } from "sequelize";
 import { log } from "console";
 import { Rabbitmq } from "../infrastructure/rabbitMq";
+import { eventModel } from "../infrastructure/eventModel";
 
 
-interface Event extends Model {
-    id: number;
-    uuid: string;
-    queue: string;
-    event: string;
-    payload: any; // ajusta el tipo según tu estructura real
-  }
+
   
   interface CleanedEvent {
     id: number;
@@ -143,49 +138,29 @@ export class AppRoutes {
                 username,
                 password,
                 database:dbname,
-                logging:false,
+                logging:(msg) => {console.log(msg);},
                 port:3306,
                 dialect:'mysql'
             }
 
             const sequelize = new Sequelize(config)
 
-            var sequelizeEvent = sequelize.define<Event>('domain_event_listen_queue',{
-                id:{
-                    type:DataTypes.INTEGER,
-                    primaryKey: true
-                },
-                uuid:{
-                    type:DataTypes.TEXT,
-                },
-                connection:{
-                    type:DataTypes.TEXT,
-                },
-                queue:{
-                    type:DataTypes.TEXT,
-                },
-                event:{
-                    type:DataTypes.TEXT,
-                },
-                payload:{
-                    type:DataTypes.TEXT,
-                },
-                exception:{
-                    type:DataTypes.TEXT,
-                }
-            },{
-                tableName:'domain_event_listen_queue',
-                timestamps:false
-            })
+            var sequelizeEvent = eventModel(sequelize)
 
             sequelize.sync().then(async () => {
                 var events = await sequelizeEvent.findAll({
                     where:{
-                        event:'academic-administration.sign-ups.student_signedup'
+                        event:'academic-administration.sign-ups.student_signedup',
+                        created_at:{
+                            [Op.gte]:new Date('2024-01-17 00:00:00')
+                        }
                     },
                     limit:itemsPage,
                     offset:(page - 1) * itemsPage
                 })
+
+                console.log(events[0]);
+                
 
                 const eventClean = events.map(function (element) {
                     return {
@@ -200,7 +175,10 @@ export class AppRoutes {
                 
                 var totalEvents = await sequelizeEvent.count({
                     where:{
-                        event:'academic-administration.sign-ups.student_signedup'
+                        event:'academic-administration.sign-ups.student_signedup',
+                        created_at:{
+                            [Op.gte]:new Date('2024-01-17 00:00:00')
+                        }
                     },
                 })
                 res.json({
@@ -230,33 +208,7 @@ export class AppRoutes {
 
             const sequelize = new Sequelize(config)
 
-            var sequelizeEvent = sequelize.define<Event>('domain_event_listen_queue',{
-                id:{
-                    type:DataTypes.INTEGER,
-                    primaryKey: true
-                },
-                uuid:{
-                    type:DataTypes.TEXT,
-                },
-                connection:{
-                    type:DataTypes.TEXT,
-                },
-                queue:{
-                    type:DataTypes.TEXT,
-                },
-                event:{
-                    type:DataTypes.TEXT,
-                },
-                payload:{
-                    type:DataTypes.TEXT,
-                },
-                exception:{
-                    type:DataTypes.TEXT,
-                }
-            },{
-                tableName:'domain_event_listen_queue',
-                timestamps:false
-            })
+            var sequelizeEvent = eventModel(sequelize)
 
             sequelize.sync().then(async () => {
                 sequelizeEvent.findAll({
@@ -265,6 +217,8 @@ export class AppRoutes {
                     },
                     raw:true
                 }).then((values) => {
+                    console.log(values[0]);
+                    
                     Rabbitmq.start(rabbit,values)
                 })
             })
