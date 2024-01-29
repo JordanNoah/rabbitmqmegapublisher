@@ -8,9 +8,10 @@ import { StudentDto } from "../domain/dtos/students.dto";
 import csvProcessing from "../infrastructure/csvProcessing"
 import { Options, Sequelize, DataTypes, Model, Op } from "sequelize";
 import { log } from "console";
-import { Rabbitmq } from "../infrastructure/rabbitMq";
 import { eventModel } from "../infrastructure/eventModel";
-
+import {Connection,Channel, connect, ConsumeMessage, Options as RabbitOpt} from "amqplib"
+import {socketManager} from "./server";
+import Semaphore from "semaphore-async-await"
 
 
   
@@ -175,7 +176,7 @@ export class AppRoutes {
                     where:{
                         event:'academic-administration.sign-ups.student_signedup',
                         created_at:{
-                            [Op.gte]:new Date('2024-01-17 00:00:00')
+                            [Op.gte]:new Date('2024-01-18 00:00:00')
                         }
                     },
                 })
@@ -189,7 +190,29 @@ export class AppRoutes {
         })
 
         router.post("/rabbit/sync", async(req,res) => {            
-            const { rabbit, database } = req.body          
+            const { rabbit, database } = req.body
+
+            var configRabbit: RabbitOpt.Connect = {
+                username: rabbit.username,
+                password: rabbit.password,
+                protocol: rabbit.protocol,
+                hostname: rabbit.hostname,
+                port: rabbit.port,
+                vhost: rabbit.vhost
+            }
+
+
+            var rabbitConnection = await connect(configRabbit);
+
+            var channel = await rabbitConnection.createConfirmChannel();
+
+            var exchange = await channel.assertExchange('sagittarius-a', 'fanout');
+
+            var queue = await channel.assertQueue('teaching-action.moodle_ju',{
+                durable:true
+            });
+
+            await channel.bindQueue('teaching-action.moodle_ju', 'sagittarius-a', 'sagittarius-a');
 
             var config: Options = {
                 host: database.host,
@@ -205,16 +228,45 @@ export class AppRoutes {
 
             var sequelizeEvent = eventModel(sequelize)
 
-            sequelize.sync().then(async () => {
-                sequelizeEvent.findAll({
-                    where:{
-                        event:'academic-administration.sign-ups.student_signedup'
-                    },
-                    raw:true
-                }).then((values) => {
-                    Rabbitmq.start(rabbit,values)
-                })
+            await sequelize.sync();
+
+            var events = await sequelizeEvent.findAll({
+                where:{
+                    event:'academic-administration.sign-ups.student_signedup',
+                    created_at:{
+                        [Op.gte]:new Date('2024-01-18 00:00:00')
+                    }
+                },
+                raw:true
             })
+            const concurrencySemaphore = new Semaphore(1);
+            for (let index = 0; index < events.length; index++) {
+                await concurrencySemaphore.acquire();
+                const element = events[index];
+
+                channel.publish(
+                    'sagittarius-a',
+                    'sagittarius-a',
+                    Buffer.from(element.payload),
+                    {
+                        appId:'academic-administration.sign-ups',
+                        type:element.event,
+                        timestamp:Math.floor(new Date(element.created_at).getTime() / 1000),
+                        messageId:element.uuid,
+                        deliveryMode:2,
+                        contentType:'application/json'
+                    }
+                )
+
+                var objectSocket = {
+                    processed:index,
+                    notProcessed:events.length - (index+1),
+                    percent: ((index+1)/events.length) * 100
+                }
+
+                socketManager.emit('processedEventRabbit',objectSocket)
+                concurrencySemaphore.release();
+            }
 
             res.json({processing:true,totalRows: await sequelizeEvent.count()})
         })

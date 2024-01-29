@@ -6,6 +6,7 @@ interface Event extends Model {
     queue: string;
     event: string;
     payload: any; // ajusta el tipo según tu estructura real
+    created_at: Date;
   }
 
 export const eventModel = (sequelize:Sequelize) => {
