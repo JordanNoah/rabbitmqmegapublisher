@@ -12,6 +12,7 @@ import { eventModel } from "../infrastructure/eventModel";
 import {Connection,Channel, connect, ConsumeMessage, Options as RabbitOpt} from "amqplib"
 import {socketManager} from "./server";
 import Semaphore from "semaphore-async-await"
+import {RabbitDto} from "../domain/dtos/rabbit.dto";
 
 
   
@@ -154,10 +155,13 @@ export class AppRoutes {
                         event:'academic-administration.sign-ups.student_signedup',
                         created_at:{
                             [Op.gte]:new Date('2024-01-17 00:00:00')
-                        }
+                        },
                     },
                     limit:itemsPage,
-                    offset:(page - 1) * itemsPage
+                    offset:(page - 1) * itemsPage,
+                    order:[
+                        ['id','ASC']
+                    ]
                 })
                 
 
@@ -192,83 +196,93 @@ export class AppRoutes {
         router.post("/rabbit/sync", async(req,res) => {            
             const { rabbit, database } = req.body
 
-            var configRabbit: RabbitOpt.Connect = {
-                username: rabbit.username,
-                password: rabbit.password,
-                protocol: rabbit.protocol,
-                hostname: rabbit.hostname,
-                port: rabbit.port,
-                vhost: rabbit.vhost
-            }
+            const [error,rabbitDto] = RabbitDto.create(rabbit)
 
+            if (error) return res.status(400).json({error})
 
-            var rabbitConnection = await connect(configRabbit);
-
-            var channel = await rabbitConnection.createConfirmChannel();
-
-            var exchange = await channel.assertExchange('sagittarius-a', 'fanout');
-
-            var queue = await channel.assertQueue('teaching-action.moodle_ju',{
-                durable:true
-            });
-
-            await channel.bindQueue('teaching-action.moodle_ju', 'sagittarius-a', 'sagittarius-a');
-
-            var config: Options = {
-                host: database.host,
-                username: database.username,
-                password: database.password,
-                database: database.dbname,
-                logging:false,
-                port:3306,
-                dialect:'mysql'
-            }
-
-            const sequelize = new Sequelize(config)
-
-            var sequelizeEvent = eventModel(sequelize)
-
-            await sequelize.sync();
-
-            var events = await sequelizeEvent.findAll({
-                where:{
-                    event:'academic-administration.sign-ups.student_signedup',
-                    created_at:{
-                        [Op.gte]:new Date('2024-01-18 00:00:00')
-                    }
-                },
-                raw:true
-            })
-            const concurrencySemaphore = new Semaphore(1);
-            for (let index = 0; index < events.length; index++) {
-                await concurrencySemaphore.acquire();
-                const element = events[index];
-
-                channel.publish(
-                    'sagittarius-a',
-                    'sagittarius-a',
-                    Buffer.from(element.payload),
-                    {
-                        appId:'academic-administration.sign-ups',
-                        type:element.event,
-                        timestamp:Math.floor(new Date(element.created_at).getTime() / 1000),
-                        messageId:element.uuid,
-                        deliveryMode:2,
-                        contentType:'application/json'
-                    }
-                )
-
-                var objectSocket = {
-                    processed:index,
-                    notProcessed:events.length - (index+1),
-                    percent: ((index+1)/events.length) * 100
+            if(!rabbitDto){
+                return res.status(400).json({error:'Rabbit dto missing'})
+            }else{
+                var configRabbit: RabbitOpt.Connect = {
+                    username: rabbitDto.username,
+                    password: rabbitDto.password,
+                    protocol: rabbitDto.protocol,
+                    hostname: rabbitDto.hostname,
+                    port: rabbitDto.port,
+                    vhost: rabbitDto.vhost
                 }
 
-                socketManager.emit('processedEventRabbit',objectSocket)
-                concurrencySemaphore.release();
-            }
+                var rabbitConnection = await connect(configRabbit);
 
-            res.json({processing:true,totalRows: await sequelizeEvent.count()})
+                var channel = await rabbitConnection.createConfirmChannel();
+
+                var exchange = await channel.assertExchange(rabbitDto.exchange, rabbitDto.typeExchange);
+
+                var queue = await channel.assertQueue(rabbitDto.queue,{
+                    durable:true
+                });
+
+                await channel.bindQueue(rabbitDto.queue, rabbitDto.exchange, rabbitDto.routingKey);
+
+                var config: Options = {
+                    host: database.host,
+                    username: database.username,
+                    password: database.password,
+                    database: database.dbname,
+                    logging:false,
+                    port:3306,
+                    dialect:'mysql'
+                }
+
+                const sequelize = new Sequelize(config)
+
+                var sequelizeEvent = eventModel(sequelize)
+
+                await sequelize.sync();
+
+                var events = await sequelizeEvent.findAll({
+                    where:{
+                        event:'academic-administration.sign-ups.student_signedup',
+                        created_at:{
+                            [Op.gte]:new Date('2024-01-18 00:00:00')
+                        }
+                    },
+                    order:[
+                        ['id','ASC']
+                    ],
+                    raw:true
+                })
+                const concurrencySemaphore = new Semaphore(1);
+                for (let index = 0; index < events.length; index++) {
+                    await concurrencySemaphore.acquire();
+                    const element = events[index];
+
+                    channel.publish(
+                        rabbitDto.exchange,
+                        rabbitDto.routingKey,
+                        Buffer.from(element.payload),
+                        {
+                            appId:'academic-administration.sign-ups',
+                            type:element.event,
+                            timestamp:Math.floor(new Date(element.created_at).getTime() / 1000),
+                            messageId:element.uuid,
+                            deliveryMode:2,
+                            contentType:'application/json'
+                        }
+                    )
+
+                    var objectSocket = {
+                        processed:index,
+                        notProcessed:events.length - (index+1),
+                        percent: ((index+1)/events.length) * 100
+                    }
+
+                    socketManager.emit('processedEventRabbit',objectSocket)
+                    concurrencySemaphore.release();
+                }
+
+                res.json({processing:true,totalRows: await sequelizeEvent.count()})
+            }
         })
 
         return router
